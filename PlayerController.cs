@@ -1,51 +1,54 @@
 ﻿using UnityEngine;
 using UnityEngine.InputSystem;
+using System; // Додано для підтримки Action
 
 public class PlayerController : MonoBehaviour
 {
+    // Поля класу згідно з конспектом
     public InputAction MoveAction;
-    private float speed = 3.0f;
+    public float speed = 3.0f; // Швидкість для домашнього завдання
+    Rigidbody2D rigidbody2d;
+    Vector2 move;
 
-    // --- ЗМІННІ ДЛЯ СУМІСНОСТІ З ІНШИМИ СКРИПТАМИ ВИКЛАДАЧА ---
+    // Змінні здоров'я, щоб не сварилися інші скрипти
     public int maxHealth = 5;
     public int health = 5;
 
-    // Тепер це подія-делегат, як і вимагає GameManager
-    public System.Action OnTalkedToNPC;
+    // Змінна розмови, яка підійде для GameManager.cs
+    public Action OnTalkedToNPC;
 
     void Start()
     {
+        // Увімкнення вводу та отримання компонента фізики
         MoveAction.Enable();
+        rigidbody2d = GetComponent<Rigidbody2D>();
     }
 
     void Update()
     {
-        Vector2 move = MoveAction.ReadValue<Vector2>();
-
-        float currentSpeed = speed;
-        if (Keyboard.current.leftShiftKey.isPressed)
-        {
-            currentSpeed = speed * 1.8f;
-        }
-
-        Vector2 position = (Vector2)transform.position;
-        position = position + move * currentSpeed * Time.deltaTime;
-
-        position.x = Mathf.Clamp(position.x, -10f, 10f);
-        position.y = Mathf.Clamp(position.y, -10f, 10f);
-
-        transform.position = position;
+        // Зчитування натискань клавіш (ввід) виключно в Update
+        move = MoveAction.ReadValue<Vector2>();
+        Debug.Log(move);
     }
 
-    // --- ФУНКЦІЇ ДЛЯ СУМІСНОСТІ ---
+    void FixedUpdate()
+    {
+        // Физичний рух через MovePosition у FixedUpdate
+        Vector2 position = (Vector2)rigidbody2d.position
+            + move * speed * Time.deltaTime;
+
+        rigidbody2d.MovePosition(position);
+    }
+
+    // Функція здоров'я, щоб сусідній скрипт Enemy.cs не видавав помилку
     public void ChangeHealth(int amount)
     {
-        health = Mathf.Clamp(health + amount, 0, maxHealth);
+        // Залишаємо порожньою, знадобиться в наступних юнітах
     }
 
+    // Функція звуку, щоб скрипт HealthCollectible.cs не видавав помилку
     public void PlaySound(AudioClip clip)
     {
-        // Порожньо для першої лабораторної
+        // Залишаємо порожньою, звук налаштовуватиметься далі
     }
 }
-
