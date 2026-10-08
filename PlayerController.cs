@@ -1,67 +1,67 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerController : MonoBehaviour
+namespace Beginner2D
 {
-    public InputAction MoveAction;
-    Rigidbody2D rigidbody2d;
-    Vector2 move;
-    public float speed = 3.0f;
-
-    public int maxHealth = 5;
-    public int health { get { return currentHealth; } }
-    int currentHealth;
-
-    public float timeInvincible = 2.0f;
-    bool isInvincible;
-    float damageCooldown;
-
-    public System.Action OnTalkedToNPC;
-
-    void Start()
+    public class PlayerController : MonoBehaviour
     {
-        MoveAction.Enable();
-        rigidbody2d = GetComponent<Rigidbody2D>();
-        currentHealth = maxHealth;
-    }
+        public InputAction MoveAction;
+        public InputAction LaunchAction;
+        public float speed = 4.0f;
+        public int maxHealth = 5;
+        public float timeInvincible = 2.0f;
+        public GameObject projectilePrefab;
 
-    void Update()
-    {
-        move = MoveAction.ReadValue<Vector2>();
+        int currentHealth;
+        bool isInvincible;
+        float damageCooldown;
+        float shotCooldown = 0.5f;
+        float shotTimer;
 
-        if (isInvincible)
+        Rigidbody2D rigidbody2d;
+        Vector2 move;
+        Vector2 moveDirection = new Vector2(1, 0);
+        Animator animator;
+
+        public int health { get { return currentHealth; } }
+
+        void Start()
         {
-            damageCooldown -= Time.deltaTime;
-            if (damageCooldown < 0)
-            {
-                isInvincible = false;
-            }
+            MoveAction.Enable();
+            LaunchAction.Enable();
+            rigidbody2d = GetComponent<Rigidbody2D>();
+            animator = GetComponent<Animator>();
+            currentHealth = maxHealth;
         }
-    }
 
-    void FixedUpdate()
-    {
-        Vector2 position = (Vector2)rigidbody2d.position + move * speed * Time.deltaTime;
-        rigidbody2d.MovePosition(position);
-    }
-
-    public void ChangeHealth(int amount)
-    {
-        if (amount < 0)
+        void Update()
         {
+            move = MoveAction.ReadValue<Vector2>();
+
+            if (!Mathf.Approximately(move.x, 0.0f) || !Mathf.Approximately(move.y, 0.0f))
+            {
+                moveDirection.Set(move.x, move.y);
+                moveDirection.Normalize();
+            }
+
+            animator.SetFloat("Look X", moveDirection.x);
+            animator.SetFloat("Look Y", moveDirection.y);
+            animator.SetFloat("Speed", move.magnitude);
+
             if (isInvincible)
             {
-                return;
+                damageCooldown -= Time.deltaTime;
+                if (damageCooldown < 0) isInvincible = false;
             }
-            isInvincible = true;
-            damageCooldown = timeInvincible;
+
+            if (shotTimer > 0) shotTimer -= Time.deltaTime;
+
+            if (LaunchAction.WasPressedThisFrame() && shotTimer();
+            if (proj != null)
+            {
+                proj.Launch(moveDirection, 300f);
+            }
+            animator.SetTrigger("Launch");
         }
-
-        currentHealth = Mathf.Clamp(currentHealth + amount, 0, maxHealth);
-        Debug.Log(currentHealth + "/" + maxHealth);
-    }
-
-    public void PlaySound(AudioClip clip)
-    {
     }
 }
