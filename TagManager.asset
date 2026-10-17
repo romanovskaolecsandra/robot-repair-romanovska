@@ -1,0 +1,59 @@
+using UnityEngine;
+
+public class PlayerController : MonoBehaviour
+{
+    // Налаштування здоров'я
+    public int maxHealth = 5;
+    private int currentHealth;
+
+    // Рух та напрямок погляду
+    private Vector2 lookDirection = Vector2.down;
+    
+    // Шар для NPC (завдання 3)
+    [SerializeField] private LayerMask npcLayer; 
+
+    void Start()
+    {
+        currentHealth = maxHealth;
+    }
+
+    void Update()
+    {
+        // Завдання 3 та 4: Пускаємо промінь Raycast довжиною 1.5 по шару NPC
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, lookDirection, 1.5f, npcLayer);
+        
+        if (hit.collider != null)
+        {
+            NonPlayerCharacter npc = hit.collider.GetComponent<NonPlayerCharacter>();
+            if (npc != null)
+            {
+                // Бульбашка над NPC з'являється, лише коли робот дивиться на нього
+                npc.SetDialogueBoxActive(true);
+
+                // Натискання на клавішу X викликає діалог (Завдання 3)
+                if (Input.GetKeyDown(KeyCode.X))
+                {
+                    UIHandler.instance.DisplayDialogue();
+                }
+            }
+        }
+    }
+
+    // Метод зміни здоров'я (Завдання 2)
+    public void ChangeHealth(int amount)
+    {
+        currentHealth = Mathf.Clamp(currentHealth + amount, 0, maxHealth);
+        
+        // Оновлюємо смугу здоров'я у відсотках через (float)
+        if (UIHandler.instance != null)
+        {
+            UIHandler.instance.SetHealthValue(currentHealth / (float)maxHealth);
+        }
+
+        // Завдання 6: Якщо здоров'я закінчилось — поразка
+        if (currentHealth <= 0 && GameManager.instance != null)
+        {
+            GameManager.instance.LoseGame();
+        }
+    }
+}
