@@ -9,59 +9,131 @@ public class GameManager : MonoBehaviour
     public class Visitor
     {
         public string visitorName;
-        [TextArea(3, 5)] public string documentDetails;
-        [TextArea(3, 5)] public string dialogueLine;
+        [TextArea(2, 4)] public string documentDetails;     // Перепустка
+        [TextArea(2, 4)] public string healthCertDetails;   // Меддовідка
+        [TextArea(2, 4)] public string dialogueLine;
         public Sprite avatarSprite;
         public bool isSpyOrIdiot;
     }
 
-    [Header("UI Elements")]
+    [System.Serializable]
+    public class LevelData
+    {
+        public string levelName;
+        [TextArea(2, 4)] public string dailyRules;
+        public int startingLives = 3;
+        public bool useHealthCert = false;
+        public bool useTimer = false;
+        public float timePerVisitor = 15f;
+        public List<Visitor> visitors = new List<Visitor>();
+    }
+
+    [Header("Зв'язки")]
+    public JuiceEffects juiceEffects;
+    public MenuManager menuManager;
+
+    [Header("Звуки")]
+    public AudioSource sfxSource;
+    public AudioClip successSound;
+    public AudioClip errorSound;
+
+    [Header("UI Елементи")]
+    public TMP_Text rulesText;
     public TMP_Text dialogueText;
     public TMP_Text docDetailsText;
+    public GameObject healthCertObject;
+    public TMP_Text healthCertText;
     public Image avatarImage;
     public TMP_Text livesText;
     public TMP_Text scoreText;
+    public TMP_Text timerText;
 
     [Header("End Game UI")]
     public GameObject endGamePanel;
     public TMP_Text endTitleText;
     public TMP_Text endStatsText;
+    public GameObject nextLevelButton;
 
-    [Header("Game Data")]
-    public List<Visitor> visitorsList = new List<Visitor>();
+    [Header("3 Рівні гри")]
+    public List<LevelData> levels = new List<LevelData>();
 
+    private int currentLevelIndex = 0;
     private int currentVisitorIndex = 0;
     private int score = 0;
     private int lives = 3;
+    private float currentTimer = 0f;
+    private bool isPlaying = false;
 
-    void Start()
+    void Update()
     {
-        UpdateUI();
+        if (!isPlaying || levels.Count == 0) return;
+
+        LevelData currentLevel = levels[currentLevelIndex];
+
+        if (currentLevel.useTimer)
+        {
+            currentTimer -= Time.deltaTime;
+            if (timerText != null)
+            {
+                timerText.text = $"ЧАС: {Mathf.CeilToInt(currentTimer)} с";
+                timerText.color = currentTimer <= 5f ? Color.red : Color.white;
+            }
+
+            if (currentTimer <= 0f)
+            {
+                lives--;
+                PlayError();
+                if (juiceEffects != null) juiceEffects.PlayErrorFeedback();
+                NextVisitor();
+            }
+        }
     }
 
-    void UpdateUI()
+    public void StartLevel(int levelIndex)
     {
-        if (livesText != null) livesText.text = "ЩИТИ: " + new string('X', lives);
+        if (levelIndex < 0 || levelIndex >= levels.Count) return;
+
+        currentLevelIndex = levelIndex;
+        LevelData level = levels[currentLevelIndex];
+
+        currentVisitorIndex = 0;
+        score = 0;
+        lives = level.startingLives;
+        isPlaying = true;
+
+        if (rulesText != null) rulesText.text = level.dailyRules;
+        if (healthCertObject != null) healthCertObject.SetActive(level.useHealthCert);
+        if (timerText != null) timerText.gameObject.SetActive(level.useTimer);
+
+        UpdateUI(true);
+    }
+
+    public void StartNextLevel()
+    {
+        if (menuManager != null && currentLevelIndex + 1 < levels.Count)
+            menuManager.SelectLevel(currentLevelIndex + 1);
+        else if (menuManager != null)
+            menuManager.OpenLevelSelect();
+    }
+
+    void UpdateUI(bool animateEntrance = false)
+    {
+        if (livesText != null) livesText.text = "ЩИТИ: " + new string('X', Mathf.Max(0, lives));
         if (scoreText != null) scoreText.text = $"БАЛИ: {score}";
 
-        // Перевірка на поразку
-        if (lives <= 0)
-        {
-            ShowEndScreen(false);
-            return;
-        }
+        LevelData currentLevel = levels[currentLevelIndex];
 
-        // Перевірка на перемогу
-        if (currentVisitorIndex >= visitorsList.Count)
-        {
-            ShowEndScreen(true);
-            return;
-        }
+        if (lives <= 0) { ShowEndScreen(false); return; }
+        if (currentVisitorIndex >= currentLevel.visitors.Count) { ShowEndScreen(true); return; }
 
-        // Логіка показу персонажа
-        Visitor currentVisitor = visitorsList[currentVisitorIndex];
+        if (currentLevel.useTimer) currentTimer = currentLevel.timePerVisitor;
+
+        Visitor currentVisitor = currentLevel.visitors[currentVisitorIndex];
         dialogueText.text = $"\"{currentVisitor.dialogueLine}\"";
         docDetailsText.text = currentVisitor.documentDetails;
+
+        if (currentLevel.useHealthCert && healthCertText != null)
+            healthCertText.text = currentVisitor.healthCertDetails;
 
         if (currentVisitor.avatarSprite != null)
         {
@@ -72,22 +144,27 @@ public class GameManager : MonoBehaviour
         {
             avatarImage.color = Color.gray;
         }
+
+        if (animateEntrance && juiceEffects != null)
+            juiceEffects.AnimateNewVisitor();
     }
 
     public void OnAcceptButtonPressed()
     {
-        if (lives <= 0 || currentVisitorIndex >= visitorsList.Count) return;
+        if (!isPlaying) return;
 
-        Visitor currentVisitor = visitorsList[currentVisitorIndex];
+        Visitor currentVisitor = levels[currentLevelIndex].visitors[currentVisitorIndex];
         if (currentVisitor.isSpyOrIdiot)
         {
             lives--;
-            Debug.Log("Помилка! Впущено порушника!");
+            PlayError();
+            if (juiceEffects != null) juiceEffects.PlayErrorFeedback();
         }
         else
         {
             score += 10;
-            Debug.Log("Правильно! Громадянина впущено.");
+            PlaySuccess();
+            if (juiceEffects != null) juiceEffects.PlaySuccessFeedback();
         }
 
         NextVisitor();
@@ -95,41 +172,59 @@ public class GameManager : MonoBehaviour
 
     public void OnRejectButtonPressed()
     {
-        if (lives <= 0 || currentVisitorIndex >= visitorsList.Count) return;
+        if (!isPlaying) return;
 
-        Visitor currentVisitor = visitorsList[currentVisitorIndex];
+        Visitor currentVisitor = levels[currentLevelIndex].visitors[currentVisitorIndex];
         if (currentVisitor.isSpyOrIdiot)
         {
             score += 10;
-            Debug.Log("Правильно! Порушника затримано.");
+            PlaySuccess();
+            if (juiceEffects != null) juiceEffects.PlaySuccessFeedback();
         }
         else
         {
             lives--;
-            Debug.Log("Помилка! Вигнали чеснулюдину!");
+            PlayError();
+            if (juiceEffects != null) juiceEffects.PlayErrorFeedback();
         }
 
         NextVisitor();
     }
 
+    void PlaySuccess()
+    {
+        if (sfxSource != null && successSound != null)
+            sfxSource.PlayOneShot(successSound);
+    }
+
+    void PlayError()
+    {
+        if (sfxSource != null && errorSound != null)
+            sfxSource.PlayOneShot(errorSound);
+    }
+
     public void NextVisitor()
     {
         currentVisitorIndex++;
-        UpdateUI();
+        UpdateUI(true);
     }
 
     void ShowEndScreen(bool isWin)
     {
+        isPlaying = false;
+
         if (endGamePanel != null)
         {
             endGamePanel.SetActive(true);
 
-            // Знаходимо компонент Image нашої панелі, щоб змінити її колір
-            Image panelImage = endGamePanel.GetComponent<Image>();
-
             if (isWin)
             {
-                if (panelImage != null) panelImage.color = new Color32(20, 50, 20, 255); // Темно-зелене тло
+                int unlockedLevel = PlayerPrefs.GetInt("UnlockedLevel", 0);
+                if (currentLevelIndex + 1 > unlockedLevel)
+                {
+                    PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 1);
+                    PlayerPrefs.Save();
+                }
 
                 if (endTitleText != null)
                 {
@@ -137,25 +232,26 @@ public class GameManager : MonoBehaviour
                     endTitleText.color = Color.green;
                 }
 
-                string rank = score >= 40 ? "Ідеальний Охоронець" : "Халатний Співробітник";
+                int maxScore = levels[currentLevelIndex].visitors.Count * 10;
+                string rank = score >= maxScore - 10 ? "Ідеальний Охоронець" : "Втомлений Наглядач";
+
                 if (endStatsText != null)
-                {
-                    endStatsText.text = $"Ви успішно захистили Бункер-68!\n\nВаш рахунок: {score} балів.\nЗвання: {rank}";
-                }
+                    endStatsText.text = $"Рівень «{levels[currentLevelIndex].levelName}» пройдено!\n\nРахунок: {score} / {maxScore}\nЗвання: {rank}";
+
+                if (nextLevelButton != null)
+                    nextLevelButton.SetActive(currentLevelIndex + 1 < levels.Count);
             }
             else
             {
-                if (panelImage != null) panelImage.color = new Color32(60, 10, 10, 255); // Темно-червоне тло
-
                 if (endTitleText != null)
                 {
                     endTitleText.text = "БУНКЕР ЗАХОПЛЕНО";
                     endTitleText.color = Color.red;
                 }
                 if (endStatsText != null)
-                {
                     endStatsText.text = "Бункер заражено радіоактивною пусткою через ваші помилки.\n\nСпробуйте ще раз.";
-                }
+
+                if (nextLevelButton != null) nextLevelButton.SetActive(false);
             }
         }
     }
